@@ -12,6 +12,7 @@ const COMMANDS = {
   "close-tab": closeTab,
   "new-tab": newTab,
   "reload-extension": reloadExtension,
+  "toggle-keep-awake": toggleKeepAwake,
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -92,3 +93,25 @@ async function newTab() {
 function reloadExtension() {
   chrome.runtime.reload();
 }
+
+// z — toggle keep-awake, so the OS doesn't dim, sleep, or lock the screen while
+// idle. One-shot. chrome.power (not the Screen Wake Lock API, which needs a
+// visible document) holds the request for the extension's lifetime rather than
+// the service worker's, but an extension reload or browser restart drops it —
+// so the flag lives in local storage and is re-applied whenever the worker
+// starts (below). The toolbar badge shows when it's on.
+async function toggleKeepAwake() {
+  const { keepAwake } = await chrome.storage.local.get("keepAwake");
+  await chrome.storage.local.set({ keepAwake: !keepAwake });
+  applyKeepAwake(!keepAwake);
+}
+
+function applyKeepAwake(on) {
+  if (on) chrome.power.requestKeepAwake("display");
+  else chrome.power.releaseKeepAwake();
+  chrome.action.setBadgeText({ text: on ? "Z" : "" });
+}
+
+// Requesting again when already awake is harmless, so this can run on every
+// worker start without checking the current state.
+chrome.storage.local.get("keepAwake").then(({ keepAwake }) => applyKeepAwake(!!keepAwake));

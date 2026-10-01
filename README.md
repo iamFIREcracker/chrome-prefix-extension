@@ -12,6 +12,7 @@ key to trigger a binding. Three binding families ship today:
 | **Alt+W** | **)** / **(** | move to the next / previous tab     |
 | **Alt+W** | **&** / **c** | close the current tab / open a new one |
 | **Alt+W** | **r**         | reload the extension                |
+| **Alt+W** | **z**         | keep the screen awake (toggle)      |
 
 The page-theming family is inspired by these tmux bindings:
 
@@ -37,6 +38,7 @@ bind 8 select-pane -P "bg=color0,fg=color15"
    - **)** / **(** to move to the next / previous tab.
    - **&** / **c** to close the current tab / open a new one.
    - **r** to reload the extension.
+   - **z** to toggle keeping the screen awake.
 
 ### Recolor the page
 
@@ -96,6 +98,21 @@ Like `source-file` in tmux: restarts the extension via
 keep the old code (and go inert) until reloaded. We keep this binding dead
 simple and don't auto-reload tabs; just reload any tab that misbehaves.
 
+### Keep the screen awake
+
+| Key | Action                         |
+|-----|--------------------------------|
+| z   | keep the screen awake (toggle) |
+
+Stops the OS from dimming, sleeping, or locking the screen while you're idle,
+like `caffeinate -d`. **One-shot** toggle; the toolbar badge shows **Z** while
+it's on. It uses `chrome.power.requestKeepAwake("display")` rather than the
+web's Screen Wake Lock API, which only holds while a page is visible and so
+can't stay on in the background. The setting is kept in `chrome.storage.local`
+and re-applied when the extension reloads or the browser restarts. It only
+blocks *idle* locking: locking by hand, closing the lid, or an enforced IT
+policy still lock the screen.
+
 ## Install (unpacked)
 
 1. Visit `chrome://extensions`.
@@ -114,8 +131,8 @@ simple and don't auto-reload tabs; just reload any tab that misbehaves.
 - `schemes.js` — color palette + CSS builder (shared by popup & content).
 - `content.js` — re-applies the saved scheme on page load.
 - `popup.js` / `popup.html` / `popup.css` — the 1–8 picker UI; 0 resets.
-- `background.js` — service worker for tab navigation + management and the
-  extension reload (`( ) & c r`).
+- `background.js` — service worker for tab navigation + management, the
+  extension reload, and keep-awake (`( ) & c r z`).
 
 ## Tests
 
@@ -132,7 +149,7 @@ npm run test:setup  # one-time: download the extension-capable Chromium build
 npm test            # run the suite
 ```
 
-Expected output — six passing tests:
+Expected output — seven passing tests:
 
 ```
 ✔ service worker registers and openPopup() is available
@@ -140,6 +157,7 @@ Expected output — six passing tests:
 ✔ end-to-end: ( in the popup goes to the previous tab
 ✔ end-to-end: & in the popup closes the active tab and a neighbour takes over
 ✔ end-to-end: c in the popup opens a new active tab
+✔ end-to-end: z in the popup toggles keep-awake, badge, and closes the popup
 ✔ walkTab() covers the full wrap-around matrix on a clean 3-tab strip
 ```
 

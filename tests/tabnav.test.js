@@ -169,6 +169,28 @@ test("end-to-end: c in the popup opens a new active tab", async () => {
   await waitFor(async () => (await tabsInfo()).length === before.length);
 });
 
+test("end-to-end: z in the popup toggles keep-awake, badge, and closes the popup", async () => {
+  // A throwaway popup page: z dismisses the picker itself (no tab change does
+  // it), and the shared popup must stay open for the walkTab test below.
+  const picker = await ctx.newPage();
+  await picker.goto(`chrome-extension://${extId}/popup.html`);
+  const keepAwake = () =>
+    sw.evaluate(async () => (await chrome.storage.local.get("keepAwake")).keepAwake);
+  const badge = () => sw.evaluate(() => chrome.action.getBadgeText({}));
+
+  await picker.evaluate(() =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "z" }))
+  );
+  await waitFor(async () => (await keepAwake()) === true);
+  await waitFor(() => picker.isClosed());
+  assert.equal(await badge(), "Z", "the badge should show keep-awake is on");
+
+  // Toggle back off so the profile is left as we found it.
+  await sw.evaluate(() => toggleKeepAwake());
+  assert.equal(await keepAwake(), false);
+  assert.equal(await badge(), "", "the badge should clear when keep-awake is off");
+});
+
 test("walkTab() covers the full wrap-around matrix on a clean 3-tab strip", async () => {
   // Drop the popup tab so the strip is exactly [a, b, c] and the math is easy
   // to reason about. walkTab is called directly with a known active tab.

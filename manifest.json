@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Prefix",
   "version": "1.0.0",
-  "description": "tmux-style keybindings for the browser: press Alt+W, then 1-8 to recolor the page (0 resets), ( / ) to move between tabs, & / c to close / open a tab, or r to reload the extension.",
-  "permissions": ["scripting", "activeTab", "storage", "tabs"],
+  "description": "tmux-style keybindings for the browser: press Alt+W, then 1-8 to recolor the page (0 resets), ( / ) to move between tabs, & / c to close / open a tab, r to reload the extension, or z to keep the screen awake.",
+  "permissions": ["scripting", "activeTab", "storage", "tabs", "power"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "Prefix — tmux-style bindings (press Alt+W)",

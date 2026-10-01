@@ -106,12 +106,15 @@
   // `bind -r`: tap the same key again without re-pressing Alt+W. One-shot commands
   // run once and let the popup close.
   // Don't window.close() for these — the tab change owns the lifecycle either way.
+  // The exception is a one-shot that leaves the tab alone (`dismiss`): nothing
+  // else would close the popup, so we close it once the worker has the message.
   const TAB_ACTIONS = {
     "(": { type: "walk-tab", dir: -1, repeat: true },
     ")": { type: "walk-tab", dir: 1, repeat: true },
     "&": { type: "close-tab" },
     "c": { type: "new-tab" },
     "r": { type: "reload-extension" },
+    "z": { type: "toggle-keep-awake", dismiss: true },
   };
 
   // Auto-dismiss: the picker is a transient tmux-style prefix, not a window meant
@@ -130,7 +133,8 @@
     const action = TAB_ACTIONS[e.key];
     if (action) {
       e.preventDefault();
-      chrome.runtime.sendMessage(action);
+      const sent = chrome.runtime.sendMessage(action);
+      if (action.dismiss) sent.finally(() => window.close());
       return;
     }
     if (Object.prototype.hasOwnProperty.call(SCHEMES, e.key)) {
