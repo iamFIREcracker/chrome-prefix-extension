@@ -98,6 +98,13 @@ Like `source-file` in tmux: restarts the extension via
 keep the old code (and go inert) until reloaded. We keep this binding dead
 simple and don't auto-reload tabs; just reload any tab that misbehaves.
 
+**After pulling an update, press `r`.** Chrome reads `popup.html` / `popup.js`
+from disk each time the picker opens, so popup changes (like a new cheatsheet
+entry) show up right away and can make the update look loaded. Changes to
+`manifest.json` (such as a new permission) and `background.js` only take effect
+after a reload. Until then a new binding can appear in the cheatsheet but fail:
+for example, **z** before a reload fails with `chrome.power` undefined.
+
 ### Keep the screen awake
 
 | Key | Action                         |
