@@ -66,11 +66,15 @@ They take no layout space and let clicks through.
 | 7   | light (white)   |
 | 8   | dark (black)    |
 
-The choice is saved **per-tab**, tmux-pane style: it sticks as long as the tab
-is open (surviving reloads and navigation), stays local to that one tab, and is
-forgotten when the tab closes or the browser restarts. It's keyed by tab id in
-`chrome.storage.session`; `content.js` re-applies it on load by asking the
-background worker for its own tab's color.
+The choice is saved **per host**: every tab on that host shows the same color,
+including tabs opened later, and it survives reloads and browser restarts until
+you pick **0** there. Hosts are matched exactly, port included, so
+`mail.example.com` and `docs.example.com` keep separate colors, and so do
+`localhost:3000` and `localhost:8080`. Default ports are left out, so
+`https://example.com:443` is the same host as `https://example.com`. It's keyed
+by host in `chrome.storage.local`; `content.js` re-applies it on load and
+repaints the other open tabs on the host when it changes. Pages without a host
+(`file://`) are colored only until they reload.
 
 ### Move between tabs
 
@@ -149,7 +153,8 @@ policy still lock the screen.
 - `manifest.json` — MV3 manifest, command, content script.
 - `schemes.js` — color palette + banner CSS builder (shared by popup &
   content).
-- `content.js` — re-applies the saved banner color on page load.
+- `content.js` — re-applies the host's saved banner color on page load and
+  when it changes.
 - `popup.js` / `popup.html` / `popup.css` — the picker UI: Alt+C, then 1–8;
   0 resets.
 - `background.js` — service worker for tab navigation + management, the

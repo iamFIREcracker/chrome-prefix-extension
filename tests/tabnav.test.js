@@ -13,6 +13,7 @@ const { chromium } = require("playwright");
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
+const http = require("node:http");
 
 const EXT = path.resolve(__dirname, "..");
 
@@ -169,7 +170,7 @@ test("end-to-end: c in the popup opens a new active tab", async () => {
   await waitFor(async () => (await tabsInfo()).length === before.length);
 });
 
-test("end-to-end: Alt+C then a digit in the popup draws the banners on the active tab", async () => {
+test("end-to-end: Alt+C then a digit in the popup colors every tab on the host and survives a reload", async () => {
   // A throwaway popup page: applying a scheme closes the picker. The picker
   // captures the active tab when it loads, so bring tab a to the front first,
   // then reload the picker in the background to bind it to tab a.
@@ -179,10 +180,9 @@ test("end-to-end: Alt+C then a digit in the popup draws the banners on the activ
   await waitFor(async () => (await activeUrl())?.endsWith("?a"));
   await picker.reload();
 
-  const tabId = (await tabsInfo()).find((t) => t.active).id;
-  const key = "scheme-tab:" + tabId;
+  const key = "scheme-host:example.com";
   const stored = () =>
-    sw.evaluate(async (k) => (await chrome.storage.session.get(k))[k], key);
+    sw.evaluate(async (k) => (await chrome.storage.local.get(k))[k], key);
   const press = (init) =>
     picker.evaluate(
       (i) => document.dispatchEvent(new KeyboardEvent("keydown", i)),
@@ -201,21 +201,75 @@ test("end-to-end: Alt+C then a digit in the popup draws the banners on the activ
   await waitFor(() => picker.isClosed());
 
   // Both banners take color 1 (red, #ab0000); the page background is untouched.
-  const banner = (pseudo) =>
-    pages.a.evaluate(
+  const RED = "rgb(171, 0, 0)";
+  const banner = (page, pseudo) =>
+    page.evaluate(
       (p) => getComputedStyle(document.documentElement, p).backgroundColor,
       pseudo
     );
-  assert.equal(await banner("::before"), "rgb(171, 0, 0)", "top banner");
-  assert.equal(await banner("::after"), "rgb(171, 0, 0)", "bottom banner");
+  assert.equal(await banner(pages.a, "::before"), RED, "top banner");
+  assert.equal(await banner(pages.a, "::after"), RED, "bottom banner");
   assert.notEqual(
     await pages.a.evaluate(() => getComputedStyle(document.body).backgroundColor),
-    "rgb(171, 0, 0)",
+    RED,
     "the page background must keep its own color"
   );
 
-  // Clear the stored scheme so the profile is left as we found it.
-  await sw.evaluate((k) => chrome.storage.session.remove(k), key);
+  // Tab b is on the same host, so it repaints without a reload.
+  await waitFor(async () => (await banner(pages.b, "::before")) === RED);
+
+  // The color is stored per host, so a reload brings it back.
+  await pages.a.reload();
+  await waitFor(async () => (await banner(pages.a, "::before")) === RED);
+
+  // Clearing the stored scheme removes the banners from every tab on the host
+  // and leaves the profile as we found it.
+  await sw.evaluate((k) => chrome.storage.local.remove(k), key);
+  await waitFor(async () => (await banner(pages.b, "::before")) !== RED);
+});
+
+test("colors are kept per port: two local servers on one host stay separate", async () => {
+  // Two HTTP servers on 127.0.0.1, each on its own free port.
+  const listen = () =>
+    new Promise((resolve) => {
+      const server = http.createServer((req, res) => {
+        res.setHeader("Content-Type", "text/html");
+        res.end("<!doctype html><title>port</title><p>port</p>");
+      });
+      server.listen(0, "127.0.0.1", () => resolve(server));
+    });
+  const servers = [await listen(), await listen()];
+  const hosts = servers.map((s) => "127.0.0.1:" + s.address().port);
+  const [first, second] = await Promise.all(hosts.map(() => ctx.newPage()));
+
+  try {
+    // Color only the first port, then load both: only the first gets banners.
+    await sw.evaluate(
+      (k) => chrome.storage.local.set({ [k]: 1 }),
+      "scheme-host:" + hosts[0]
+    );
+    await first.goto("http://" + hosts[0] + "/");
+    await second.goto("http://" + hosts[1] + "/");
+
+    const banner = (page) =>
+      page.evaluate(
+        () => getComputedStyle(document.documentElement, "::before").backgroundColor
+      );
+    await waitFor(async () => (await banner(first)) === "rgb(171, 0, 0)");
+    assert.notEqual(
+      await banner(second),
+      "rgb(171, 0, 0)",
+      "another port on the same host must keep its own color"
+    );
+  } finally {
+    await sw.evaluate(
+      (k) => chrome.storage.local.remove(k),
+      "scheme-host:" + hosts[0]
+    );
+    await first.close();
+    await second.close();
+    servers.forEach((s) => s.close());
+  }
 });
 
 test("end-to-end: z in the popup toggles keep-awake, badge, and closes the popup", async () => {

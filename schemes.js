@@ -61,7 +61,15 @@
     ].join("\n");
   }
 
-  const api = { SCHEMES, STYLE_ID, buildCss };
+  // Storage key for a host's saved color in chrome.storage.local, or null for
+  // pages without a host (file://, data:), which are never saved. `host` is
+  // hostname plus any non-default port, so localhost:3000 and localhost:8080
+  // keep separate colors.
+  function hostKey(host) {
+    return host ? "scheme-host:" + host : null;
+  }
+
+  const api = { SCHEMES, STYLE_ID, buildCss, hostKey };
   if (typeof self !== "undefined") self.PREFIX_BANNER = api;
   if (typeof window !== "undefined") window.PREFIX_BANNER = api;
 })();

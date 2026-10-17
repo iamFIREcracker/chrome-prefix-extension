@@ -2,10 +2,10 @@
 // enter color mode, then press 1-8 (or click a swatch) to color the banners at
 // the top and bottom of the current page; 0 removes them.
 (function () {
-  const { SCHEMES, STYLE_ID, buildCss } = window.PREFIX_BANNER;
+  const { SCHEMES, STYLE_ID, buildCss, hostKey } = window.PREFIX_BANNER;
 
   let tab = null;
-  let sessionKey = null;
+  let storageKey = null;
 
   // Injected into the page world to add/update/remove the <style> element.
   function setPageStyle(css, id) {
@@ -20,6 +20,14 @@
       (document.head || document.documentElement).appendChild(el);
     }
     el.textContent = css;
+  }
+
+  function hostOf(url) {
+    try {
+      return new URL(url).host;
+    } catch (e) {
+      return "";
+    }
   }
 
   async function getActiveTab() {
@@ -59,11 +67,12 @@
       }
     }
 
-    // Persist per-tab (tmux-pane style) so it survives reloads but stays local
-    // to this tab and dies with it. session storage is in-memory; tab ids are
-    // stable across reloads/discards. content.js re-applies on load.
-    if (sessionKey) {
-      await chrome.storage.session.set({ [sessionKey]: idx === 0 ? null : idx });
+    // Persist per host in local storage, so the color survives reloads, new
+    // tabs, and browser restarts. content.js re-applies it on load and repaints
+    // the other open tabs on the same host when it changes.
+    if (storageKey) {
+      if (idx === 0) await chrome.storage.local.remove(storageKey);
+      else await chrome.storage.local.set({ [storageKey]: idx });
     }
 
     markActive(idx);
@@ -171,10 +180,8 @@
     buildGrid();
     resetIdle();
     tab = await getActiveTab();
-    if (tab) {
-      sessionKey = "scheme-tab:" + tab.id;
-      const data = await chrome.storage.session.get(sessionKey);
-      markActive(data[sessionKey] ?? 0);
-    }
+    storageKey = tab && hostKey(hostOf(tab.url));
+    const data = storageKey ? await chrome.storage.local.get(storageKey) : {};
+    markActive(data[storageKey] ?? 0);
   })();
 })();
