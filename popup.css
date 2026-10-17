@@ -17,6 +17,22 @@ body {
   color: #fff;
 }
 
+/* Swap the hint when Alt+C enters color mode. */
+.color-hint,
+body.color-mode .prefix-hint {
+  display: none;
+}
+
+body.color-mode .color-hint {
+  display: block;
+}
+
+body.color-mode .grid {
+  outline: 1px solid #00b3b3;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
 .reset-hint {
   margin: 2px 0 8px;
   color: #888;

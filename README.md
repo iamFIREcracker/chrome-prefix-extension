@@ -8,7 +8,7 @@ key to trigger a binding. Three binding families ship today:
 
 | Prefix    | Then…       | Family                              |
 |-----------|-------------|-------------------------------------|
-| **Alt+W** | **1**–**8** | recolor the page like a tmux pane (**0** resets) |
+| **Alt+W** | **Alt+C**, **1**–**8** | recolor the page like a tmux pane (**0** resets) |
 | **Alt+W** | **)** / **(** | move to the next / previous tab     |
 | **Alt+W** | **&** / **c** | close the current tab / open a new one |
 | **Alt+W** | **r**         | reload the extension                |
@@ -34,13 +34,18 @@ bind 8 select-pane -P "bg=color0,fg=color15"
 1. Open the picker — click the toolbar icon, or press **Alt+W**
    (the tmux-style "prefix").
 2. Then press a key:
-   - **1**–**8** (or click a swatch) to apply a color; **0** resets.
+   - **Alt+C** to enter color mode, then **1**–**8** (or click a swatch) to
+     apply a color; **0** resets.
    - **)** / **(** to move to the next / previous tab.
    - **&** / **c** to close the current tab / open a new one.
    - **r** to reload the extension.
    - **z** to toggle keeping the screen awake.
 
 ### Recolor the page
+
+Press **Alt+C** after the prefix to enter color mode, then a digit. The digits
+live in their own key table, like tmux's `switch-client -T`, so they do
+nothing in the prefix alone. Clicking a swatch works in either mode.
 
 | Key | Colors                 |
 |-----|------------------------|
@@ -137,7 +142,8 @@ policy still lock the screen.
 - `manifest.json` — MV3 manifest, command, content script.
 - `schemes.js` — color palette + CSS builder (shared by popup & content).
 - `content.js` — re-applies the saved scheme on page load.
-- `popup.js` / `popup.html` / `popup.css` — the 1–8 picker UI; 0 resets.
+- `popup.js` / `popup.html` / `popup.css` — the picker UI: Alt+C, then 1–8;
+  0 resets.
 - `background.js` — service worker for tab navigation + management, the
   extension reload, and keep-awake (`( ) & c r z`).
 
@@ -156,7 +162,7 @@ npm run test:setup  # one-time: download the extension-capable Chromium build
 npm test            # run the suite
 ```
 
-Expected output — seven passing tests:
+Expected output — eight passing tests:
 
 ```
 ✔ service worker registers and openPopup() is available
@@ -164,6 +170,7 @@ Expected output — seven passing tests:
 ✔ end-to-end: ( in the popup goes to the previous tab
 ✔ end-to-end: & in the popup closes the active tab and a neighbour takes over
 ✔ end-to-end: c in the popup opens a new active tab
+✔ end-to-end: Alt+C then a digit in the popup recolors the active tab
 ✔ end-to-end: z in the popup toggles keep-awake, badge, and closes the popup
 ✔ walkTab() covers the full wrap-around matrix on a clean 3-tab strip
 ```

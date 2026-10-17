@@ -1,5 +1,6 @@
-// Popup: a tmux-style picker. Open it (toolbar click or Alt+W), then
-// press 1-8 (or click a swatch) to recolor the current page; 0 resets.
+// Popup: a tmux-style picker. Open it (toolbar click or Alt+W), press Alt+C to
+// enter color mode, then press 1-8 (or click a swatch) to recolor the current
+// page; 0 resets.
 (function () {
   const { SCHEMES, STYLE_ID, buildCss } = window.COLORED_BG;
 
@@ -128,18 +129,41 @@
     idleTimer = setTimeout(() => window.close(), IDLE_MS);
   }
 
+  // Color mode: a second key table, like tmux's `switch-client -T`. Alt+C
+  // enters it from the prefix; only there do the digits pick a scheme, which
+  // leaves the bare digits free in the prefix table.
+  let colorMode = false;
+  function enterColorMode() {
+    colorMode = true;
+    document.body.classList.add("color-mode");
+  }
+
+  // Match Alt+C by physical key as well as by character: on macOS, Option+C
+  // reports e.key as "ç".
+  function isColorModeKey(e) {
+    return e.altKey && (e.code === "KeyC" || e.key.toLowerCase() === "c");
+  }
+
   document.addEventListener("keydown", (e) => {
     resetIdle();
+    if (colorMode) {
+      if (Object.prototype.hasOwnProperty.call(SCHEMES, e.key)) {
+        e.preventDefault();
+        apply(Number(e.key));
+      }
+      return;
+    }
+    // Checked before TAB_ACTIONS so Alt+C never falls through to `c` (new tab).
+    if (isColorModeKey(e)) {
+      e.preventDefault();
+      enterColorMode();
+      return;
+    }
     const action = TAB_ACTIONS[e.key];
     if (action) {
       e.preventDefault();
       const sent = chrome.runtime.sendMessage(action);
       if (action.dismiss) sent.finally(() => window.close());
-      return;
-    }
-    if (Object.prototype.hasOwnProperty.call(SCHEMES, e.key)) {
-      e.preventDefault();
-      apply(Number(e.key));
     }
   });
 

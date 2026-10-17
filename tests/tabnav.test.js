@@ -169,6 +169,41 @@ test("end-to-end: c in the popup opens a new active tab", async () => {
   await waitFor(async () => (await tabsInfo()).length === before.length);
 });
 
+test("end-to-end: Alt+C then a digit in the popup recolors the active tab", async () => {
+  // A throwaway popup page: applying a scheme closes the picker. The picker
+  // captures the active tab when it loads, so bring tab a to the front first,
+  // then reload the picker in the background to bind it to tab a.
+  const picker = await ctx.newPage();
+  await picker.goto(`chrome-extension://${extId}/popup.html`);
+  await pages.a.bringToFront();
+  await waitFor(async () => (await activeUrl())?.endsWith("?a"));
+  await picker.reload();
+
+  const tabId = (await tabsInfo()).find((t) => t.active).id;
+  const key = "scheme-tab:" + tabId;
+  const stored = () =>
+    sw.evaluate(async (k) => (await chrome.storage.session.get(k))[k], key);
+  const press = (init) =>
+    picker.evaluate(
+      (i) => document.dispatchEvent(new KeyboardEvent("keydown", i)),
+      init
+    );
+
+  // A bare digit in the prefix table does nothing.
+  await press({ key: "1" });
+  assert.equal(await stored(), undefined, "a digit without Alt+C must not recolor");
+  assert.ok(!picker.isClosed(), "the picker should stay open");
+
+  // Alt+C enters color mode (macOS reports Option+C as "ç"), then 1 applies.
+  await press({ key: "ç", code: "KeyC", altKey: true });
+  await press({ key: "1", code: "Digit1" });
+  await waitFor(async () => (await stored()) === 1);
+  await waitFor(() => picker.isClosed());
+
+  // Clear the stored scheme so the profile is left as we found it.
+  await sw.evaluate((k) => chrome.storage.session.remove(k), key);
+});
+
 test("end-to-end: z in the popup toggles keep-awake, badge, and closes the popup", async () => {
   // A throwaway popup page: z dismisses the picker itself (no tab change does
   // it), and the shared popup must stay open for the walkTab test below.
