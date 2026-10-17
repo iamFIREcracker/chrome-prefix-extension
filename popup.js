@@ -1,8 +1,8 @@
 // Popup: a tmux-style picker. Open it (toolbar click or Alt+W), press Alt+C to
-// enter color mode, then press 1-8 (or click a swatch) to recolor the current
-// page; 0 resets.
+// enter color mode, then press 1-8 (or click a swatch) to color the banners at
+// the top and bottom of the current page; 0 removes them.
 (function () {
-  const { SCHEMES, STYLE_ID, buildCss } = window.COLORED_BG;
+  const { SCHEMES, STYLE_ID, buildCss } = window.PREFIX_BANNER;
 
   let tab = null;
   let sessionKey = null;
@@ -35,11 +35,11 @@
     if (!tab) {
       setStatus("No active tab.", true);
     } else if (/^(chrome|edge|about|chrome-extension|devtools):/.test(tab.url || "")) {
-      setStatus("Can't recolor this page (browser/internal URL).", true);
+      setStatus("Can't add banners to this page (browser/internal URL).", true);
     } else {
       try {
         await chrome.scripting.executeScript({
-          target: { tabId: tab.id, allFrames: true },
+          target: { tabId: tab.id },
           func: setPageStyle,
           args: [css, STYLE_ID],
         });

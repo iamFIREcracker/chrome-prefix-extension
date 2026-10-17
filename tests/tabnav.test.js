@@ -169,7 +169,7 @@ test("end-to-end: c in the popup opens a new active tab", async () => {
   await waitFor(async () => (await tabsInfo()).length === before.length);
 });
 
-test("end-to-end: Alt+C then a digit in the popup recolors the active tab", async () => {
+test("end-to-end: Alt+C then a digit in the popup draws the banners on the active tab", async () => {
   // A throwaway popup page: applying a scheme closes the picker. The picker
   // captures the active tab when it loads, so bring tab a to the front first,
   // then reload the picker in the background to bind it to tab a.
@@ -191,7 +191,7 @@ test("end-to-end: Alt+C then a digit in the popup recolors the active tab", asyn
 
   // A bare digit in the prefix table does nothing.
   await press({ key: "1" });
-  assert.equal(await stored(), undefined, "a digit without Alt+C must not recolor");
+  assert.equal(await stored(), undefined, "a digit without Alt+C must not draw the banners");
   assert.ok(!picker.isClosed(), "the picker should stay open");
 
   // Alt+C enters color mode (macOS reports Option+C as "ç"), then 1 applies.
@@ -199,6 +199,20 @@ test("end-to-end: Alt+C then a digit in the popup recolors the active tab", asyn
   await press({ key: "1", code: "Digit1" });
   await waitFor(async () => (await stored()) === 1);
   await waitFor(() => picker.isClosed());
+
+  // Both banners take color 1 (red, #ab0000); the page background is untouched.
+  const banner = (pseudo) =>
+    pages.a.evaluate(
+      (p) => getComputedStyle(document.documentElement, p).backgroundColor,
+      pseudo
+    );
+  assert.equal(await banner("::before"), "rgb(171, 0, 0)", "top banner");
+  assert.equal(await banner("::after"), "rgb(171, 0, 0)", "bottom banner");
+  assert.notEqual(
+    await pages.a.evaluate(() => getComputedStyle(document.body).backgroundColor),
+    "rgb(171, 0, 0)",
+    "the page background must keep its own color"
+  );
 
   // Clear the stored scheme so the profile is left as we found it.
   await sw.evaluate((k) => chrome.storage.session.remove(k), key);

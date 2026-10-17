@@ -8,25 +8,27 @@ key to trigger a binding. Three binding families ship today:
 
 | Prefix    | Then…       | Family                              |
 |-----------|-------------|-------------------------------------|
-| **Alt+W** | **Alt+C**, **1**–**8** | recolor the page like a tmux pane (**0** resets) |
+| **Alt+W** | **Alt+C**, **1**–**8** | color the banners at the top and bottom of the page, like a tmux session (**0** removes them) |
 | **Alt+W** | **)** / **(** | move to the next / previous tab     |
 | **Alt+W** | **&** / **c** | close the current tab / open a new one |
 | **Alt+W** | **r**         | reload the extension                |
 | **Alt+W** | **z**         | keep the screen awake (toggle)      |
 
-The page-theming family is inspired by these tmux bindings:
+The color family mirrors these tmux bindings, which color the status line at
+the top and the border line under the active pane, never the pane itself:
 
 ```
-# Colored panes
-bind 0 select-pane -P "default"
-bind 1 select-pane -P "bg=color1,fg=color15"
-bind 2 select-pane -P "bg=color10,fg=color0"
-bind 3 select-pane -P "bg=color11,fg=color0"
-bind 4 select-pane -P "bg=color4,fg=color15"
-bind 5 select-pane -P "bg=color5,fg=color15"
-bind 6 select-pane -P "bg=color6,fg=color15"
-bind 7 select-pane -P "bg=color15,fg=color0"
-bind 8 select-pane -P "bg=color0,fg=color15"
+# Colored sessions
+bind M-c switch-client -Ttablecolor
+bind -Ttablecolor 0 set-option -u status-style
+bind -Ttablecolor 1 set-option status-style "bg=color1"
+bind -Ttablecolor 2 set-option status-style "bg=color10"
+bind -Ttablecolor 3 set-option status-style "bg=color11"
+bind -Ttablecolor 4 set-option status-style "bg=color4"
+bind -Ttablecolor 5 set-option status-style "bg=color5"
+bind -Ttablecolor 6 set-option status-style "bg=color6"
+bind -Ttablecolor 7 set-option status-style "bg=color15"
+bind -Ttablecolor 8 set-option status-style "bg=color0"
 ```
 
 ## Usage
@@ -35,35 +37,40 @@ bind 8 select-pane -P "bg=color0,fg=color15"
    (the tmux-style "prefix").
 2. Then press a key:
    - **Alt+C** to enter color mode, then **1**–**8** (or click a swatch) to
-     apply a color; **0** resets.
+     color the banners; **0** removes them.
    - **)** / **(** to move to the next / previous tab.
    - **&** / **c** to close the current tab / open a new one.
    - **r** to reload the extension.
    - **z** to toggle keeping the screen awake.
 
-### Recolor the page
+### Color the banners
 
 Press **Alt+C** after the prefix to enter color mode, then a digit. The digits
 live in their own key table, like tmux's `switch-client -T`, so they do
 nothing in the prefix alone. Clicking a swatch works in either mode.
 
-| Key | Colors                 |
-|-----|------------------------|
-| 0   | default (reset)        |
-| 1   | red bg / white fg      |
-| 2   | green bg / black fg    |
-| 3   | yellow bg / black fg   |
-| 4   | blue bg / white fg     |
-| 5   | magenta bg / white fg  |
-| 6   | cyan bg / white fg     |
-| 7   | light: white bg / black fg |
-| 8   | dark: black bg / white fg  |
+The color goes to two thin bars fixed to the top and bottom edges of the
+window, the counterparts of the tmux status line and the bottom border line.
+The page itself keeps its own colors, so the banners never clash with it.
+They take no layout space and let clicks through.
+
+| Key | Banner color    |
+|-----|-----------------|
+| 0   | none (removes the banners) |
+| 1   | red             |
+| 2   | green           |
+| 3   | yellow          |
+| 4   | blue            |
+| 5   | magenta         |
+| 6   | cyan            |
+| 7   | light (white)   |
+| 8   | dark (black)    |
 
 The choice is saved **per-tab**, tmux-pane style: it sticks as long as the tab
 is open (surviving reloads and navigation), stays local to that one tab, and is
 forgotten when the tab closes or the browser restarts. It's keyed by tab id in
 `chrome.storage.session`; `content.js` re-applies it on load by asking the
-background worker for its own tab's scheme.
+background worker for its own tab's color.
 
 ### Move between tabs
 
@@ -87,8 +94,8 @@ to walk across tabs without re-pressing **Alt+W** (handled by `background.js`).
 Like `kill-pane` / `new-window` in tmux. Unlike **)** / **(**, these are
 **one-shot** (not repeatable): they run once and the picker closes — re-press
 **Alt+W** for the next command. Closing the **last** tab closes the window (the
-truer `kill-pane` analog), and **c** lands on the new-tab page, which theming
-can't touch but management keys still work on.
+truer `kill-pane` analog), and **c** lands on the new-tab page, where the banners
+can't be drawn but management keys still work.
 
 ### Reload the extension
 
@@ -133,15 +140,16 @@ policy still lock the screen.
 4. (Optional) Set/confirm the shortcut at `chrome://extensions/shortcuts`.
 
 > Note: tabs already open before installing won't have the content script;
-> the popup still applies colors instantly to them, but reload them once for
+> the popup still draws the banners instantly on them, but reload them once for
 > persistence to kick in. The extension cannot touch restricted pages
 > (`chrome://`, the Web Store, etc.).
 
 ## Files
 
 - `manifest.json` — MV3 manifest, command, content script.
-- `schemes.js` — color palette + CSS builder (shared by popup & content).
-- `content.js` — re-applies the saved scheme on page load.
+- `schemes.js` — color palette + banner CSS builder (shared by popup &
+  content).
+- `content.js` — re-applies the saved banner color on page load.
 - `popup.js` / `popup.html` / `popup.css` — the picker UI: Alt+C, then 1–8;
   0 resets.
 - `background.js` — service worker for tab navigation + management, the
@@ -170,7 +178,7 @@ Expected output — eight passing tests:
 ✔ end-to-end: ( in the popup goes to the previous tab
 ✔ end-to-end: & in the popup closes the active tab and a neighbour takes over
 ✔ end-to-end: c in the popup opens a new active tab
-✔ end-to-end: Alt+C then a digit in the popup recolors the active tab
+✔ end-to-end: Alt+C then a digit in the popup draws the banners on the active tab
 ✔ end-to-end: z in the popup toggles keep-awake, badge, and closes the popup
 ✔ walkTab() covers the full wrap-around matrix on a clean 3-tab strip
 ```
@@ -182,25 +190,6 @@ Expected output — eight passing tests:
 ## Customizing colors
 
 Edit the `SCHEMES` map in `schemes.js`. Each entry is `{ name, bg, fg }`
-with hex colors; index `0` is `null` (reset).
-
-## Escape hatch (for sites you control)
-
-The themer flattens almost everything to one background + one foreground.
-On a site whose HTML you own, you can control theming with:
-
-- `data-colored-bg="off"` — disables theming for this element and its subtree
-- `data-colored-bg="on"` — re-enables theming for this element and its subtree
-
-Example:
-
-```html
-<body data-colored-bg="off">
-  <div class="container" data-colored-bg="on">
-    <!-- this container will be themed even though body is off -->
-  </div>
-</body>
-```
-
-This lets you keep the page body in its original colors while theming specific
-sections, or vice versa.
+with hex colors: `bg` colors the banners, `fg` only the swatch label in the
+picker; index `0` is `null` (no banners). `BANNER_HEIGHT` sets the thickness
+of the bars.
