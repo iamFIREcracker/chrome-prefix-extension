@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Prefix",
   "version": "1.0.0",
-  "description": "tmux-style keybindings for the browser: press Alt+W, then Alt+C and 1-8 to color the banners at the top and bottom of the page (0 removes them), ( / ) to move between tabs, & / c to close / open a tab, r to reload the extension, or z to keep the screen awake.",
+  "description": "tmux-style keybindings for the browser: press Alt+W, then Alt+C and 1-8 to color the banners at the top and bottom of the page or Alt+1-8 to recolor the page itself (0 / Alt+0 remove them), ( / ) to move between tabs, & / c to close / open a tab, r to reload the extension, or z to keep the screen awake.",
   "permissions": ["scripting", "activeTab", "storage", "tabs", "power"],
   "host_permissions": ["<all_urls>"],
   "action": {
@@ -16,7 +16,8 @@
     {
       "matches": ["<all_urls>"],
       "js": ["schemes.js", "content.js"],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "commands": {

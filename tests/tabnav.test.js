@@ -228,6 +228,107 @@ test("end-to-end: Alt+C then a digit in the popup colors every tab on the host a
   await waitFor(async () => (await banner(pages.b, "::before")) !== RED);
 });
 
+test("end-to-end: Alt+C then Alt+digit in the popup recolors this tab's page beside the banners", async () => {
+  const picker = await ctx.newPage();
+  await picker.goto(`chrome-extension://${extId}/popup.html`);
+  await pages.a.bringToFront();
+  await waitFor(async () => (await activeUrl())?.endsWith("?a"));
+  await picker.reload();
+
+  const tabA = (await tabsInfo()).find((t) => t.active).id;
+  const bannerKey = "scheme-host:example.com";
+  const pageKey = "page-scheme-tab:" + tabA;
+  const local = (k) =>
+    sw.evaluate(async (k) => (await chrome.storage.local.get(k))[k], k);
+  const session = (k) =>
+    sw.evaluate(async (k) => (await chrome.storage.session.get(k))[k], k);
+  const press = (init) =>
+    picker.evaluate(
+      (i) => document.dispatchEvent(new KeyboardEvent("keydown", i)),
+      init
+    );
+  const RED = "rgb(171, 0, 0)";
+  const GREEN = "rgb(58, 214, 58)";
+  const bodyBg = (page) =>
+    page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const banner = (page) =>
+    page.evaluate(
+      () => getComputedStyle(document.documentElement, "::before").backgroundColor
+    );
+
+  try {
+    // Banners red first, so we can check the page layer leaves them alone.
+    await sw.evaluate((k) => chrome.storage.local.set({ [k]: 1 }), bannerKey);
+    await waitFor(async () => (await banner(pages.a)) === RED);
+
+    // Alt+C, then Alt+2 (macOS reports Option+2 as "™") recolors the page green.
+    await press({ key: "ç", code: "KeyC", altKey: true });
+    await press({ key: "™", code: "Digit2", altKey: true });
+    await waitFor(async () => (await session(pageKey)) === 2);
+    await waitFor(() => picker.isClosed());
+
+    assert.equal(await bodyBg(pages.a), GREEN, "the page takes color 2");
+    assert.equal(await banner(pages.a), RED, "the banners keep their own color");
+    assert.equal(await local(bannerKey), 1, "the banner color is not overwritten");
+
+    // The page color belongs to the tab: tab b, on the same host, keeps its
+    // own background, and tab a keeps green across a reload.
+    assert.notEqual(await bodyBg(pages.b), GREEN, "another tab on the host is not recolored");
+    await pages.a.reload();
+    await waitFor(async () => (await bodyBg(pages.a)) === GREEN);
+    assert.equal(await banner(pages.a), RED);
+  } finally {
+    await sw.evaluate((k) => chrome.storage.local.remove(k), bannerKey);
+    await sw.evaluate((k) => chrome.storage.session.remove(k), pageKey);
+    await pages.a.reload();
+  }
+});
+
+test("the page color reaches every frame and is dropped when its tab closes", async () => {
+  // The top page on one port embeds a frame served from another port.
+  const listen = (body) =>
+    new Promise((resolve) => {
+      const server = http.createServer((req, res) => {
+        res.setHeader("Content-Type", "text/html");
+        res.end(body);
+      });
+      server.listen(0, "127.0.0.1", () => resolve(server));
+    });
+  const inner = await listen("<!doctype html><title>inner</title><p>inner</p>");
+  const innerHost = "127.0.0.1:" + inner.address().port;
+  const outer = await listen(
+    `<!doctype html><title>outer</title><iframe src="http://${innerHost}/"></iframe>`
+  );
+  const outerUrl = "http://127.0.0.1:" + outer.address().port + "/";
+  const page = await ctx.newPage();
+
+  try {
+    await page.goto(outerUrl);
+    const tabId = (await tabsInfo()).find((t) => t.url === outerUrl).id;
+    const key = "page-scheme-tab:" + tabId;
+    await sw.evaluate((k) => chrome.storage.session.set({ [k]: 2 }), key);
+    await page.reload();
+
+    const frame = await waitFor(() =>
+      page.frames().find((f) => f.url().includes(innerHost))
+    );
+    await waitFor(async () =>
+      (await frame.evaluate(() => getComputedStyle(document.body).backgroundColor)) ===
+      "rgb(58, 214, 58)"
+    );
+
+    await page.close();
+    await waitFor(async () =>
+      (await sw.evaluate(async (k) => (await chrome.storage.session.get(k))[k], key)) ===
+      undefined
+    );
+  } finally {
+    if (!page.isClosed()) await page.close();
+    inner.close();
+    outer.close();
+  }
+});
+
 test("colors are kept per port: two local servers on one host stay separate", async () => {
   // Two HTTP servers on 127.0.0.1, each on its own free port.
   const listen = () =>

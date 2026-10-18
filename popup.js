@@ -1,11 +1,11 @@
 // Popup: a tmux-style picker. Open it (toolbar click or Alt+W), press Alt+C to
 // enter color mode, then press 1-8 (or click a swatch) to color the banners at
-// the top and bottom of the current page; 0 removes them.
+// the top and bottom of the current page, or Alt+1-8 (or Alt+click a swatch)
+// to recolor the page itself; 0 / Alt+0 remove them.
 (function () {
-  const { SCHEMES, STYLE_ID, buildCss, hostKey } = window.PREFIX_BANNER;
+  const { SCHEMES, LAYERS, hostKey, tabKey } = window.PREFIX_SCHEMES;
 
   let tab = null;
-  let storageKey = null;
 
   // Injected into the page world to add/update/remove the <style> element.
   function setPageStyle(css, id) {
@@ -30,26 +30,38 @@
     }
   }
 
+  // Where a layer's color is saved for the active tab, or null when it can't
+  // be. The banners belong to the host and persist in local storage; the page
+  // color belongs to the tab and lives in session storage until the tab closes.
+  function storageOf(layer) {
+    if (!tab) return null;
+    const key = layer === "banner" ? hostKey(hostOf(tab.url)) : tabKey(tab.id);
+    if (!key) return null;
+    const area = layer === "banner" ? chrome.storage.local : chrome.storage.session;
+    return { area, key };
+  }
+
   async function getActiveTab() {
     const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
     return t;
   }
 
-  async function apply(idx) {
-    const scheme = SCHEMES[idx];
-    const css = buildCss(scheme);
+  // `layer` is "banner" or "page" (see LAYERS in schemes.js).
+  async function apply(layer, idx) {
+    const { styleId, allFrames, buildCss } = LAYERS[layer];
+    const css = buildCss(SCHEMES[idx]);
 
     // Instant apply to the active tab (covers tabs loaded before install).
     if (!tab) {
       setStatus("No active tab.", true);
     } else if (/^(chrome|edge|about|chrome-extension|devtools):/.test(tab.url || "")) {
-      setStatus("Can't add banners to this page (browser/internal URL).", true);
+      setStatus("Can't color this page (browser/internal URL).", true);
     } else {
       try {
         await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
+          target: { tabId: tab.id, allFrames },
           func: setPageStyle,
-          args: [css, STYLE_ID],
+          args: [css, styleId],
         });
         setStatus("");
       } catch (e) {
@@ -67,15 +79,15 @@
       }
     }
 
-    // Persist per host in local storage, so the color survives reloads, new
-    // tabs, and browser restarts. content.js re-applies it on load and repaints
-    // the other open tabs on the same host when it changes.
-    if (storageKey) {
-      if (idx === 0) await chrome.storage.local.remove(storageKey);
-      else await chrome.storage.local.set({ [storageKey]: idx });
+    // Persist so the color survives reloads; content.js re-applies it on load.
+    // A banner color also repaints the other open tabs on the same host.
+    const storage = storageOf(layer);
+    if (storage) {
+      if (idx === 0) await storage.area.remove(storage.key);
+      else await storage.area.set({ [storage.key]: idx });
     }
 
-    markActive(idx);
+    markActive(layer, idx);
     window.close();
   }
 
@@ -85,9 +97,11 @@
     el.classList.toggle("error", !!isError);
   }
 
-  function markActive(idx) {
+  // Each layer has its own marker: an outline for the banners, an inner ring
+  // for the page.
+  function markActive(layer, idx) {
     document.querySelectorAll(".swatch").forEach((el) => {
-      el.classList.toggle("active", Number(el.dataset.idx) === Number(idx));
+      el.classList.toggle("active-" + layer, Number(el.dataset.idx) === Number(idx));
     });
   }
 
@@ -105,7 +119,7 @@
       el.innerHTML =
         `<span class="num">${i}</span>` +
         `<span class="label">${scheme.name}</span>`;
-      el.addEventListener("click", () => apply(i));
+      el.addEventListener("click", (e) => apply(e.altKey ? "page" : "banner", i));
       grid.appendChild(el);
     });
   }
@@ -140,7 +154,8 @@
 
   // Color mode: a second key table, like tmux's `switch-client -T`. Alt+C
   // enters it from the prefix; only there do the digits pick a scheme, which
-  // leaves the bare digits free in the prefix table.
+  // leaves the bare digits free in the prefix table. A digit colors the
+  // banners; Alt+digit recolors the page.
   let colorMode = false;
   function enterColorMode() {
     colorMode = true;
@@ -153,12 +168,22 @@
     return e.altKey && (e.code === "KeyC" || e.key.toLowerCase() === "c");
   }
 
+  // The digit of a color-mode key, or null. Alt+digit is matched by physical
+  // key only: on macOS, Option+1 reports e.key as "¡".
+  function colorDigit(e) {
+    const m = e.altKey ? /^Digit(\d)$/.exec(e.code) : /^\d$/.exec(e.key);
+    if (!m) return null;
+    const idx = Number(e.altKey ? m[1] : m[0]);
+    return Object.prototype.hasOwnProperty.call(SCHEMES, idx) ? idx : null;
+  }
+
   document.addEventListener("keydown", (e) => {
     resetIdle();
     if (colorMode) {
-      if (Object.prototype.hasOwnProperty.call(SCHEMES, e.key)) {
+      const idx = colorDigit(e);
+      if (idx != null) {
         e.preventDefault();
-        apply(Number(e.key));
+        apply(e.altKey ? "page" : "banner", idx);
       }
       return;
     }
@@ -180,8 +205,10 @@
     buildGrid();
     resetIdle();
     tab = await getActiveTab();
-    storageKey = tab && hostKey(hostOf(tab.url));
-    const data = storageKey ? await chrome.storage.local.get(storageKey) : {};
-    markActive(data[storageKey] ?? 0);
+    for (const layer of Object.keys(LAYERS)) {
+      const storage = storageOf(layer);
+      const data = storage ? await storage.area.get(storage.key) : {};
+      markActive(layer, storage ? data[storage.key] ?? 0 : 0);
+    }
   })();
 })();

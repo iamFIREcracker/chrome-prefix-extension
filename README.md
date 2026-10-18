@@ -9,13 +9,15 @@ key to trigger a binding. Three binding families ship today:
 | Prefix    | Then…       | Family                              |
 |-----------|-------------|-------------------------------------|
 | **Alt+W** | **Alt+C**, **1**–**8** | color the banners at the top and bottom of the page, like a tmux session (**0** removes them) |
+| **Alt+W** | **Alt+C**, **Alt+1**–**8** | recolor the page itself, like a tmux pane (**Alt+0** restores it) |
 | **Alt+W** | **)** / **(** | move to the next / previous tab     |
 | **Alt+W** | **&** / **c** | close the current tab / open a new one |
 | **Alt+W** | **r**         | reload the extension                |
 | **Alt+W** | **z**         | keep the screen awake (toggle)      |
 
-The color family mirrors these tmux bindings, which color the status line at
-the top and the border line under the active pane, never the pane itself:
+The digits mirror these tmux bindings, which color the status line at the top
+and the border line under the active pane, never the pane itself; the Alt
+digits instead color the pane, the page here:
 
 ```
 # Colored sessions
@@ -37,7 +39,8 @@ bind -Ttablecolor 8 set-option status-style "bg=color0"
    (the tmux-style "prefix").
 2. Then press a key:
    - **Alt+C** to enter color mode, then **1**–**8** (or click a swatch) to
-     color the banners; **0** removes them.
+     color the banners, or **Alt+1**–**8** (or Alt+click a swatch) to recolor
+     the page; **0** / **Alt+0** remove them.
    - **)** / **(** to move to the next / previous tab.
    - **&** / **c** to close the current tab / open a new one.
    - **r** to reload the extension.
@@ -68,13 +71,48 @@ They take no layout space and let clicks through.
 
 The choice is saved **per host**: every tab on that host shows the same color,
 including tabs opened later, and it survives reloads and browser restarts until
-you pick **0** there. Hosts are matched exactly, port included, so
+you pick **0** there. The page color (below) is kept separately, per tab:
+setting or clearing one leaves the other alone. Hosts are matched exactly, port included, so
 `mail.example.com` and `docs.example.com` keep separate colors, and so do
 `localhost:3000` and `localhost:8080`. Default ports are left out, so
 `https://example.com:443` is the same host as `https://example.com`. It's keyed
 by host in `chrome.storage.local`; `content.js` re-applies it on load and
 repaints the other open tabs on the host when it changes. Pages without a host
 (`file://`) are colored only until they reload.
+
+### Recolor the page
+
+In color mode, hold **Alt** with the digit (or Alt+click a swatch) to recolor
+the page itself, the behavior before the banners: one background showing
+through every element and one foreground color for all text, like a colored
+tmux pane. **Alt+0** restores the page's own colors. The digits use the same
+palette, with a matching text color (bright white, or black on green, yellow,
+and light). Alt+digit is matched by physical key, since macOS reports
+Option+1 as "¡".
+
+The page color belongs to the **tab**, the way a tmux pane keeps its color: it
+survives reloads and navigation in that tab, other tabs on the same host keep
+their own, and it's gone when the tab closes (or the browser quits). It's kept
+in `chrome.storage.session` under the tab id; since a content script can't
+read its own tab id, `content.js` asks `background.js` for it on load. The
+banners, by contrast, belong to the host and persist. Both layers can be on at
+once. The page color reaches into every frame, while the banners stay on the
+top frame.
+
+The recolor flattens almost everything to one background and one foreground.
+On a site whose HTML you own, you can control it with:
+
+- `data-colored-bg="off"` — disables the recolor for this element and its
+  subtree
+- `data-colored-bg="on"` — re-enables it for this element and its subtree
+
+```html
+<body data-colored-bg="off">
+  <div class="container" data-colored-bg="on">
+    <!-- recolored even though body is off -->
+  </div>
+</body>
+```
 
 ### Move between tabs
 
@@ -151,14 +189,15 @@ policy still lock the screen.
 ## Files
 
 - `manifest.json` — MV3 manifest, command, content script.
-- `schemes.js` — color palette + banner CSS builder (shared by popup &
-  content).
-- `content.js` — re-applies the host's saved banner color on page load and
-  when it changes.
-- `popup.js` / `popup.html` / `popup.css` — the picker UI: Alt+C, then 1–8;
-  0 resets.
+- `schemes.js` — color palette + banner and page CSS builders (shared by
+  popup & content).
+- `content.js` — re-applies the host's saved banner color and the tab's page
+  color on page load, and the banner color when it changes.
+- `popup.js` / `popup.html` / `popup.css` — the picker UI: Alt+C, then 1–8
+  or Alt+1–8; 0 / Alt+0 reset.
 - `background.js` — service worker for tab navigation + management, the
-  extension reload, and keep-awake (`( ) & c r z`).
+  extension reload, and keep-awake (`( ) & c r z`); it also hands each tab its
+  page color and drops it when the tab closes.
 
 ## Tests
 
@@ -175,7 +214,7 @@ npm run test:setup  # one-time: download the extension-capable Chromium build
 npm test            # run the suite
 ```
 
-Expected output — eight passing tests:
+Expected output — eleven passing tests:
 
 ```
 ✔ service worker registers and openPopup() is available
@@ -183,7 +222,10 @@ Expected output — eight passing tests:
 ✔ end-to-end: ( in the popup goes to the previous tab
 ✔ end-to-end: & in the popup closes the active tab and a neighbour takes over
 ✔ end-to-end: c in the popup opens a new active tab
-✔ end-to-end: Alt+C then a digit in the popup draws the banners on the active tab
+✔ end-to-end: Alt+C then a digit in the popup colors every tab on the host and survives a reload
+✔ end-to-end: Alt+C then Alt+digit in the popup recolors this tab's page beside the banners
+✔ the page color reaches every frame and is dropped when its tab closes
+✔ colors are kept per port: two local servers on one host stay separate
 ✔ end-to-end: z in the popup toggles keep-awake, badge, and closes the popup
 ✔ walkTab() covers the full wrap-around matrix on a clean 3-tab strip
 ```
@@ -195,6 +237,7 @@ Expected output — eight passing tests:
 ## Customizing colors
 
 Edit the `SCHEMES` map in `schemes.js`. Each entry is `{ name, bg, fg }`
-with hex colors: `bg` colors the banners, `fg` only the swatch label in the
-picker; index `0` is `null` (no banners). `BANNER_HEIGHT` sets the thickness
+with hex colors: `bg` colors the banners and the page background, `fg` the
+page text and the swatch label in the picker; index `0` is `null` (no
+color). `BANNER_HEIGHT` sets the thickness
 of the bars.
