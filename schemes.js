@@ -48,7 +48,7 @@
     8: { name: "dark", bg: "#020202", fg: "#f4f4f4" },
   };
 
-  const BANNER_HEIGHT = "10px";
+  const BANNER_HEIGHT = "20px";
 
   // Build the CSS for the two banners: fixed bars drawn over the top and bottom
   // edges of the viewport, as the root element's ::before and ::after. They take
