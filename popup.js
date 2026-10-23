@@ -201,6 +201,16 @@
     }
   });
 
+  // On Windows, Chrome focuses its ⋮ menu when Alt is released with no other
+  // key seen since Alt went down. The popup forwards the key events it leaves
+  // unhandled to the browser window, so after an Alt chord handled above (the
+  // C of Alt+C) the browser sees a lone Alt press and release, focuses the
+  // menu, and the popup loses the keyboard. Handling the release here keeps
+  // it from reaching the browser.
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Alt") e.preventDefault();
+  });
+
   (async function init() {
     buildGrid();
     resetIdle();

@@ -170,6 +170,16 @@ test("end-to-end: c in the popup opens a new active tab", async () => {
   await waitFor(async () => (await tabsInfo()).length === before.length);
 });
 
+test("the popup keeps the Alt release from reaching the browser (Windows menu focus)", async () => {
+  const handled = await popup.evaluate(
+    () =>
+      !document.dispatchEvent(
+        new KeyboardEvent("keyup", { key: "Alt", code: "AltLeft", cancelable: true })
+      )
+  );
+  assert.ok(handled, "the Alt keyup must be default-prevented");
+});
+
 test("end-to-end: Alt+C then a digit in the popup colors every tab on the host and survives a reload", async () => {
   // A throwaway popup page: applying a scheme closes the picker. The picker
   // captures the active tab when it loads, so bring tab a to the front first,
